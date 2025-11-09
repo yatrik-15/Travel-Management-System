@@ -1,18 +1,16 @@
 // --- 1. Import Packages ---
-require('dotenv').config(); 
+require('dotenv').config(); // Loads .env file secrets
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 
 // --- 2. App Setup ---
 const app = express();
-const port = 3000;
+const port = 3000; // Your frontend will send data to this port
 
 // --- 3. Middleware ---
-// Enable CORS so your frontend (on a different URL) can make requests
-app.use(cors()); 
-// Enable Express to parse JSON data in the request body
-app.use(express.json());
+app.use(cors()); // Allow frontend to make requests
+app.use(express.json()); // Allow app to read JSON data
 
 // --- 4. MongoDB Connection ---
 const mongoURI = process.env.MONGO_URI;
@@ -25,8 +23,8 @@ mongoose.connect(mongoURI)
   });
 
 // --- 5. Mongoose Schema & Model ---
-// This blueprint matches your frontend form IDs: "name", "email", "phone"
-const customerSchema = new mongoose.Schema({
+// This "blueprint" matches the form in your index.html
+const bookingSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true 
@@ -34,16 +32,21 @@ const customerSchema = new mongoose.Schema({
   email: {
     type: String,
     required: true,
-    unique: true // No two customers can have the same email
   },
   phone: {
     type: String,
     required: true
+  },
+  packageId: { // This comes from the 'pkg' variable in your frontend
+    type: String,
+    required: true
   }
+}, {
+  timestamps: true // Adds 'createdAt' and 'updatedAt' fields
 });
 
-// This creates a collection in MongoDB called "customers"
-const Customer = mongoose.model('Customer', customerSchema);
+// This will create a collection in MongoDB called "bookings"
+const Booking = mongoose.model('Booking', bookingSchema);
 
 
 // --- 6. API Routes ---
@@ -53,36 +56,36 @@ app.get('/', (req, res) => {
 
 //
 // --- THIS IS THE API ROUTE YOUR FRONTEND WILL CALL ---
+// It listens for a POST request at http://localhost:3000/api/bookings
 //
-app.post('/api/customers', async (req, res) => {
+app.post('/api/bookings', async (req, res) => {
   try {
-    // 1. Get the data from the frontend's request body
-    const { name, email, phone } = req.body;
+    // 1. Get the data from the frontend's 'fetch' request
+    const { name, email, phone, pkg } = req.body;
 
     // 2. Validate the data
-    if (!name || !email || !phone) {
+    if (!name || !email || !phone || !pkg) {
       return res.status(400).json({ message: "All fields are required." });
     }
 
-    // 3. Create a new customer document
-    const newCustomer = new Customer({
-      name,
-      email,
-      phone
+    // 3. Create a new booking document using the Mongoose model
+    const newBooking = new Booking({
+      name: name,
+      email: email,
+      phone: phone,
+      packageId: pkg // We save the package ID (e.g., 'paris-getaway')
     });
 
-    // 4. Save it to the database
-    const savedCustomer = await newCustomer.save();
+    // 4. Save the new booking to the database
+    const savedBooking = await newBooking.save();
 
     // 5. Send a success response back to the frontend
-    res.status(201).json(savedCustomer);
+    console.log('Booking saved:', savedBooking);
+    res.status(201).json(savedBooking);
 
   } catch (error) {
-    // Handle errors (like a duplicate email)
-    if (error.code === 11000) {
-      return res.status(400).json({ message: "This email address is already in use." });
-    }
-    res.status(400).json({ message: error.message });
+    console.error('Booking save error:', error);
+    res.status(500).json({ message: "There was an error saving the booking." });
   }
 });
 
